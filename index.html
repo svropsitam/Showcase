@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стіна повідомлень</title>
+<style>
+:root{--bg:#e9e4d8;--paper:#f7f4ec;--ink:#1d2a2a;--mute:#6b7473;--line:#c9c2b0;--acc:#1f5f5b;--warn:#a23b2a}
+@media(prefers-color-scheme:dark){:root{--bg:#161c1c;--paper:#1f2727;--ink:#e6e9e4;--mute:#8d9a98;--line:#33403f;--acc:#6fc2bb;--warn:#e07a66}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,'Times New Roman',serif}
+header{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0;flex:1;font-weight:600}
+button,input,textarea{font:inherit;color:inherit}
+button{background:var(--acc);color:var(--paper);border:0;border-radius:6px;padding:8px 14px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#wall,#vgrid{columns:300px;column-gap:14px;padding:16px;max-width:1200px;margin:auto}
+.msg{break-inside:avoid;background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:12px;margin:0 0 14px}
+.meta{display:flex;justify-content:space-between;color:var(--mute);font-size:13px;margin-bottom:6px;gap:8px}
+.code{font-family:ui-monospace,Consolas,monospace;cursor:pointer}
+.text{white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.text.open{display:block}
+.text a{color:var(--acc);text-decoration:underline;word-break:break-all}
+.more{padding:2px 10px;font-size:12px;margin-top:4px}
+.att{margin-top:8px}.att img,.att video{max-width:100%;border-radius:3px;display:block}.att audio{width:100%}
+.att pre{max-height:160px;overflow:auto;background:var(--bg);padding:6px;margin:4px 0;font-size:12px}
+.att a{color:var(--acc);font-size:14px}.fn{font-size:12px;color:var(--mute)}
+dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:8px;width:min(480px,94vw);padding:16px}
+dialog::backdrop{background:#0008}
+dialog h2{margin:0;font-size:18px}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+.numtag{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:6px;padding:1px 2px 1px 8px;font-size:13px;background:var(--bg);white-space:nowrap}
+.cp-ico{background:transparent;color:var(--mute);border:0;padding:2px 6px;font-size:15px;line-height:1;border-radius:4px}
+.cp-ico:hover{color:var(--acc)}
+main{padding-bottom:56px}
+#tabs{display:flex;gap:6px;padding:8px 16px 0;max-width:1200px;margin:auto}
+.tab{background:transparent;color:var(--ink);border:1px solid var(--line)}.tab.on{background:var(--acc);color:var(--paper);border-color:var(--acc)}
+.vbar{display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0;max-width:1200px;margin:auto}
+#vempty{text-align:center;color:var(--mute);padding:40px}
+.derr{color:var(--warn);min-height:1.4em;font-size:14px;margin-top:6px}
+.post .ptitle{margin:0 0 4px;font-size:18px;line-height:1.25}
+.post .del{display:none}.isadm .post:not([data-a="master"]) .del,.ismaster .post .del{display:inline-block}
+#desk{position:fixed;inset:0;z-index:20;pointer-events:none;--tray:48px}
+.xwin{position:absolute;pointer-events:auto;min-width:200px;min-height:140px;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 24px #0006}
+.xbar{display:flex;justify-content:space-between;align-items:center;gap:6px;padding-left:10px;height:34px;flex:none;background:var(--line);color:var(--ink);font-size:13px;cursor:move;touch-action:none;user-select:none}
+.xwin.act .xbar{background:var(--acc);color:var(--paper)}
+.xbar .xt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xbtn{display:flex;flex:none}
+.xbtn button{background:transparent;color:inherit;border:0;border-radius:0;padding:0;width:30px;height:34px;font-size:15px}.xbtn .xw.on{background:#2e7d32;color:#fff}
+.xbtn button:hover{background:#fff4}.xbtn .xx:hover{background:#c0392b;color:#fff}
+.xwin iframe{flex:1;min-height:0;width:100%;border:0;background:#fff}
+.xwin:not(.act) iframe,.xwin.drag iframe{pointer-events:none}
+.xerr{flex:none;max-height:64px;overflow:auto;padding:3px 8px;background:#fdecea;color:#a23b2a;font-size:12px}.xerr[hidden]{display:none}
+.xwin.min{display:none}
+.xwin.max{left:0!important;top:0!important;width:100%!important;height:calc(100% - var(--tray))!important;border-radius:0}
+.xwin.max .rz{display:none}.xwin.max .xbar{cursor:default}
+.rz{position:absolute;z-index:3;touch-action:none}
+.rz-n{top:0;left:14px;right:14px;height:7px;cursor:ns-resize}.rz-s{bottom:0;left:14px;right:14px;height:7px;cursor:ns-resize}
+.rz-e{right:0;top:14px;bottom:14px;width:7px;cursor:ew-resize}.rz-w{left:0;top:14px;bottom:14px;width:7px;cursor:ew-resize}
+.rz-ne,.rz-nw,.rz-se,.rz-sw{width:18px;height:18px}
+.rz-ne{top:0;right:0;cursor:nesw-resize}.rz-sw{bottom:0;left:0;cursor:nesw-resize}.rz-nw{top:0;left:0;cursor:nwse-resize}.rz-se{bottom:0;right:0;cursor:nwse-resize}
+@media(pointer:coarse){.rz-n,.rz-s{height:14px}.rz-e,.rz-w{width:14px}.rz-ne,.rz-nw,.rz-se,.rz-sw{width:30px;height:30px}}
+#tray{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;gap:6px;padding:5px 8px calc(5px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line);overflow-x:auto}
+#tray[hidden]{display:none}
+.tb{flex:none;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--paper);color:var(--ink);border:1px solid var(--line);padding:4px 10px;font-size:13px}
+.tb.on{border-color:var(--acc);box-shadow:inset 0 -2px var(--acc)}
+.xchip{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding:6px 8px;border:1px dashed var(--line);border-radius:6px;font-size:14px}
+.xchip .xt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.xchip button{padding:3px 10px;font-size:13px;flex:none}
+textarea,input[type=text],input[type=password]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+textarea{min-height:110px;resize:vertical}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+.row label{display:flex;gap:6px;align-items:center}
+.chips span{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:2px 10px;font-size:13px}
+#err{color:var(--warn);min-height:1.4em;font-size:14px}
+#empty{text-align:center;color:var(--mute);padding:40px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Стіна повідомлень</h1>
+  <button id="bDiag" class="ghost" title="Діагностика CSP" aria-label="Діагностика CSP">ℹ</button><button id="bSearch" class="ghost">Пошук</button>
+  <button id="bNew" aria-label="Нове повідомлення">+ Нове</button>
+</header>
+<nav id="tabs"><button type="button" id="tWall" class="tab on">Стіна</button><button type="button" id="tVit" class="tab">Вітрина</button></nav>
+<main id="mWall"><div id="wall"></div><div id="empty" hidden>Поки що немає відкритих повідомлень.</div></main>
+<main id="mVit" hidden>
+  <div class="vbar"><button type="button" id="bAdm" class="ghost">Адмін</button><button type="button" id="bPost" hidden>+ Проєкт</button><button type="button" id="bAdmins" class="ghost" hidden>Адміни</button></div>
+  <div id="vgrid"></div><div id="vempty" hidden>У вітрині поки немає проєктів.</div>
+</main>
+
+<dialog id="dNew">
+  <div class="dhead">
+    <h2>Нове повідомлення</h2>
+    <span class="numtag" title="Номер повідомлення"><span class="code" id="newCode"></span><button class="cp-ico" id="copyNew" type="button" aria-label="Копіювати номер" title="Копіювати номер">⧉</button><button class="cp-ico" id="qrNew" type="button" aria-label="QR-код номера" title="QR-код номера">▦</button></span>
+  </div>
+  <textarea id="txt" placeholder="Текст повідомлення"></textarea>
+  <div class="row"><button class="ghost" id="bAtt" title="Прикріпити файл">📎 Файл</button><input type="file" id="file" multiple hidden>
+    <div class="chips" id="chips"></div></div>
+  <div class="row"><label><input type="checkbox" id="pub" checked> Відкрите (видно на стіні)</label></div>
+  <div class="row"><label><input type="checkbox" id="xex"> HTML+JS: відкривати як вікно-програму</label></div>
+  <div class="row"><label><input type="checkbox" id="aes"> Шифрувати AES-256 (лише за номером)</label></div>
+  <input type="password" id="pw" placeholder="Пароль для шифрування" hidden autocomplete="new-password">
+  <div id="err"></div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="cNew">Скасувати</button><button id="send">Надіслати</button></div>
+</dialog>
+
+<dialog id="dSearch">
+  <h2>Пошук за номером</h2>
+  <input type="text" id="qCode" placeholder="Номер повідомлення (XXXXX-XXXXX)" autocomplete="off">
+  <input type="password" id="qPw" placeholder="Пароль (якщо зашифроване)" style="margin-top:8px" autocomplete="off">
+  <div id="serr" style="color:var(--warn);min-height:1.4em;font-size:14px;margin-top:6px"></div>
+  <div id="res"></div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="cSearch">Закрити</button><button id="go">Знайти</button></div>
+</dialog>
+
+<dialog id="dDone"><h2>Надіслано</h2>
+  <p class="fn" style="margin:10px 0 0">Номер повідомлення:</p>
+  <p style="margin:2px 0"><span class="code" id="doneCode" style="font-size:22px"></span> <button class="cp-ico" id="copyCode" type="button" title="Копіювати номер">⧉</button></p>
+  <p class="fn" style="margin:10px 0 0">Код видалення (покажіть лише тому, кому довіряєте):</p>
+  <p style="margin:2px 0"><span class="code" id="doneDel" style="font-size:22px"></span> <button class="cp-ico" id="copyDel" type="button" title="Копіювати код видалення">⧉</button></p>
+  <p class="fn">Збережіть обидва: приховані й зашифровані повідомлення знаходяться лише за номером, а код видалення відновити неможливо.</p>
+  <div class="row" style="justify-content:flex-end"><button id="okDone">Гаразд</button></div></dialog>
+
+<dialog id="dQR" style="width:min(300px,92vw);text-align:center">
+  <canvas id="qrCv" style="width:240px;height:240px;image-rendering:pixelated;background:#fff"></canvas>
+  <p class="code" id="qrCode" style="font-size:18px;margin:6px 0"></p>
+  <div class="row" style="justify-content:center"><a id="qrDl" download="qr.png" class="fn">Зберегти PNG</a><button class="ghost" id="qrClose" type="button">Закрити</button></div>
+</dialog>
+
+<dialog id="dAdm"><h2>Вхід адміністратора</h2>
+  <input type="text" id="aLog" placeholder="Логін (master — майстер-адмін)" autocomplete="username" autocapitalize="none" style="margin-top:10px">
+  <input type="password" id="aPass" placeholder="Пароль" style="margin-top:8px" autocomplete="current-password">
+  <div id="aerr" class="derr"></div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="aCancel" type="button">Скасувати</button><button id="aGo" type="button">Увійти</button></div></dialog>
+
+<dialog id="dPost"><h2>Новий проєкт у вітрині</h2>
+  <input type="text" id="pTitle" maxlength="120" placeholder="Назва проєкту" style="margin-top:10px">
+  <textarea id="pText" style="margin-top:8px" placeholder="Опис (без обмежень довжини; посилання клікаються)"></textarea>
+  <div class="row"><button class="ghost" id="pAtt" type="button">📎 Файли</button><input type="file" id="pFile" multiple hidden><div class="chips" id="pChips"></div></div>
+  <div class="row"><label><input type="checkbox" id="pX"> HTML+JS: відкривати як вікно-програму</label></div>
+  <div id="perr" class="derr"></div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="pCancel" type="button">Скасувати</button><button id="pSend" type="button">Опублікувати</button></div></dialog>
+
+<dialog id="dAdmins"><h2>Адміністратори</h2>
+  <p class="fn">Створіть адміністратора або змініть пароль наявного (той самий логін).</p>
+  <input type="text" id="nLog" placeholder="Логін (літери, цифри, _ -)" autocapitalize="none">
+  <div class="row" style="margin-bottom:0"><input type="text" id="nPw" placeholder="Пароль (від 8 символів)" style="flex:1"><button class="ghost" id="nGen" type="button">Згенерувати</button></div>
+  <div id="nerr" class="derr"></div>
+  <div id="nok" class="fn" style="white-space:pre-wrap;user-select:all"></div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="nClose" type="button">Закрити</button><button id="nGo" type="button">Зберегти</button></div></dialog>
+
+<dialog id="dDiag"><h2>Діагностика CSP</h2><pre id="diagOut" style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:10px 0"></pre><div class="row" style="justify-content:flex-end"><button class="ghost" id="bCopyDiag">Копіювати звіт</button><button class="ghost" id="bTest">Тестове вікно</button><button id="cDiag">Закрити</button></div></dialog>
+<div id="desk"></div><div id="tray" hidden></div>
+<script>
+// ===== НАЛАШТУВАННЯ =====
+const DB_URL = "https://showcase-a1d32-default-rtdb.europe-west1.firebasedatabase.app";                 // напр. https://my-project-default-rtdb.europe-west1.firebasedatabase.app
+const RETENTION_DAYS = 1;          // скільки днів зберігати повідомлення (має збігатися з правилами БД)
+const WALL_LIMIT = 30;             // скільки останніх відкритих повідомлень показувати
+const POLL_MS = 5000;              // період оновлення стіни
+const MAX_AUTO_OPEN = 0;           // скільки HTML-вікон відкривається одразу при завантаженні (0 = усі згорнуті в панелі внизу й не запускаються, доки їх не розгорнути)
+const AUTORUN_EXEC = true;         // true: HTML-вікна запускаються одразу; false: лише після натискання ↻
+const INLINE_TEXT = 1500;          // текст довший за це ріжеться на шматки (як файли); на стіні показується початок + «Показати повністю»
+const CHUNK = 900_000;             // розмір одного шматка файлу (символів base64, ≈ 0,66 МБ); ліміту на розмір файлу немає
+// =========================
+
+const $ = id => document.getElementById(id);
+const dbBase = () => {
+  let u = DB_URL || localStorage.getItem('dburl');
+  if (!u) { u = prompt('Адреса Realtime Database (https://....firebasedatabase.app):') || ''; if (u) localStorage.setItem('dburl', u.trim()); }
+  return u.trim().replace(/\/+$/, '');
+};
+async function api(path, method = 'GET', body) {
+  const r = await fetch(dbBase() + '/' + path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) throw new Error('БД: ' + r.status + ' (' + method + ' ' + path.split('?')[0].replace(/[0-9a-f]{24}/g, '…') + (body && path === '.json' ? ' ' + Object.keys(body).slice(0, 2).map(x => x.replace(/[0-9a-f]{24}/g, '…')).join(', ') : '') + ') ' + (await r.text()).slice(0, 80));
+  return r.json();
+}
+const SV = { '.sv': 'timestamp' };
+
+// ---- байти / base64 / стиснення ----
+const toB64 = u8 => { let s = '', n = 0x8000; for (let i = 0; i < u8.length; i += n) s += String.fromCharCode.apply(null, u8.subarray(i, i + n)); return btoa(s); };
+const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const pipe = async (u8, T) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new T)).arrayBuffer());
+const gz = u8 => pipe(u8, class extends CompressionStream { constructor() { super('gzip'); } });
+const ungz = u8 => pipe(u8, class extends DecompressionStream { constructor() { super('gzip'); } });
+
+async function packFile(f) {
+  const raw = new Uint8Array(await f.arrayBuffer());
+  const z = await gz(raw);
+  const useZ = z.length < raw.length;
+  return { name: f.name, type: f.type || 'application/octet-stream', size: f.size, c: useZ ? 1 : 0, d: toB64(useZ ? z : raw) };
+}
+
+// ---- номер повідомлення та ключ у БД (хеш, щоб приховані номери не були видимі в БД) ----
+const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function genCode() { const a = crypto.getRandomValues(new Uint8Array(10)); const s = [...a].map(x => ALPH[x % 32]).join(''); return s.slice(0, 5) + '-' + s.slice(5); }
+const normCode = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(.{5})(.*)/, '$1-$2');
+async function keyOf(code) { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('msg:' + code)); return [...new Uint8Array(h)].slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join(''); }
+
+// ---- AES-GCM (PBKDF2) ----
+async function aesKey(pw, salt) {
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptPayload(obj, pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = await gz(new TextEncoder().encode(JSON.stringify(obj)));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(pw, salt), plain));
+  return { enc: 1, s: toB64(salt), iv: toB64(iv), d: toB64(ct) };
+}
+async function decryptPayload(node, pw) {
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(node.iv) }, await aesKey(pw, fromB64(node.s)), fromB64(node.d));
+  return JSON.parse(new TextDecoder().decode(await ungz(new Uint8Array(pt))));
+}
+
+async function packText(t) { const raw = new TextEncoder().encode(t), z = await gz(raw), useZ = z.length < raw.length; return { c: useZ ? 1 : 0, d: toB64(useZ ? z : raw) }; }
+// ---- посилання: підкреслені й клікабельні (лише http/https), без innerHTML ----
+function linkify(el, text) {
+  el.textContent = ''; const re = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi; let last = 0, m;
+  while ((m = re.exec(text))) {
+    let u = m[0];
+    while (u && (/[.,;:!?'"”’»\]}]$/.test(u) || (u.endsWith(')') && (u.match(/\(/g) || []).length < (u.match(/\)/g) || []).length))) u = u.slice(0, -1);
+    if (!/^(?:https?:\/\/|www\.)./i.test(u)) continue;
+    el.append(text.slice(last, m.index));
+    const a = document.createElement('a'); a.href = /^www\./i.test(u) ? 'https://' + u : u; a.textContent = u; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; a.onclick = e => e.stopPropagation(); el.append(a);
+    last = m.index + u.length; re.lastIndex = last;
+  }
+  el.append(text.slice(last));
+}
+// ---- шматки: blob/<ключ>/<файл або t для тексту>/<індекс шматка> ----
+const nChunks = s => Math.ceil(s.length / CHUNK);
+async function retry(fn, n = 3) { for (let a = 1; ; a++) { try { return await fn(); } catch (e) { if (a >= n) throw e; await new Promise(r => setTimeout(r, 800 * a)); } } }
+async function uploadChunks(k, items, say, base = 'blob') {
+  const all = [];
+  items.forEach(({ i, d }) => { for (let j = 0, p = 0; p < d.length; j++, p += CHUNK) all.push([base + '/' + k + '/' + i + '/' + j, d.slice(p, p + CHUNK)]); });
+  let batch = {}, size = 0, done = 0;
+  const flush = async () => { if (!size) return; const b = batch; batch = {}; size = 0; await retry(() => api('.json', 'PATCH', b)); say?.('Завантажено ' + done + ' з ' + all.length + ' частин…'); };
+  for (const [path, s] of all) { batch[path] = s; size += s.length; done++; if (size >= 3_000_000) await flush(); }
+  await flush();
+}
+async function fetchChunks(k, i, cn, prog, base = 'blob') {
+  const out = new Array(cn); let next = 0, got = 0;
+  await Promise.all(Array.from({ length: Math.min(4, cn) }, async () => {
+    while (next < cn) {
+      const j = next++, s = await retry(() => api(base + '/' + k + '/' + i + '/' + j + '.json'));
+      if (s == null) throw new Error('Відсутній шматок ' + (j + 1) + '/' + cn);
+      out[j] = s; prog?.(++got, cn);
+    }
+  }));
+  return out.join('');
+}
+
+// ---- очищення старих повідомлень ----
+async function cleanup() {
+  try {
+    const cutoff = Date.now() - RETENTION_DAYS * 86400000;
+    const old = await api('idx.json?orderBy="$value"&endAt=' + cutoff);
+    const keys = Object.keys(old || {}); if (!keys.length) return;
+    const upd = {}; keys.forEach(k => { upd['pub/' + k] = null; upd['priv/' + k] = null; upd['blob/' + k] = null; upd['secret/' + k] = null; upd['idx/' + k] = null; });
+    await api('.json', 'PATCH', upd);
+  } catch (e) { console.warn('cleanup', e); }
+}
+
+// ---- відображення ----
+const fmt = t => new Date(t).toLocaleString('uk-UA');
+// ---- HTML+JS вікно: пісочниця без доступу до сторінки та без мережі ----
+const EXEC_DATA = false;            // true: вікна через data:-URL (обхід CSP сторінки), але тоді втрачається безпечний контекст (crypto.subtle, буфер обміну); за потреби сам повертається до srcdoc
+let dataBlocked = false;
+document.addEventListener('securitypolicyviolation', e => { if (dataBlocked || !/^data/.test(e.blockedURI)) return; dataBlocked = true; document.querySelectorAll('.xwin').forEach(w => w._data && w._run()); });
+const EXEC_SANDBOX = 'allow-scripts allow-modals allow-forms allow-downloads';   // права вікон: alert/confirm, форми, завантаження файлів. НЕ додавайте allow-same-origin: це зніме ізоляцію
+const EXEC_NET = false;            // true: дозволити https-скрипти/CDN/fetch усередині вікон (зручніше, але менш безпечно)
+const SHIMJS = '(function(){function M(){var d={};return{getItem:function(k){return k in d?d[k]:null},setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},get length(){return Object.keys(d).length}}}["localStorage","sessionStorage"].forEach(function(n){try{window[n]}catch(e){try{var m=M();Object.defineProperty(window,n,{configurable:true,get:function(){return m}})}catch(e2){}}});try{document.cookie}catch(e){try{var c="";Object.defineProperty(document,"cookie",{configurable:true,get:function(){return c},set:function(v){c=String(v).split(";")[0]}})}catch(e3){}}})();';
+const ERRJS = 'addEventListener("error",function(e){parent.postMessage({xerr:e.message+" ("+(e.lineno||0)+")"},"*")});addEventListener("securitypolicyviolation",function(e){parent.postMessage({xerr:"CSP заблокував: "+e.blockedURI+" ("+e.violatedDirective+")",vd:e.violatedDirective,bu:e.blockedURI},"*")});addEventListener("unhandledrejection",function(e){parent.postMessage({xerr:"Promise: "+e.reason},"*")});';
+const cspFor = (net, allow = []) => {
+  const d = net
+    ? { 'default-src': ["'none'"], 'script-src': ["'unsafe-inline'", "'unsafe-eval'", 'blob:', 'data:', 'https:'], 'style-src': ["'unsafe-inline'", 'https:'], 'img-src': ['data:', 'blob:', 'https:'], 'media-src': ['data:', 'blob:', 'https:'], 'font-src': ['data:', 'https:'], 'connect-src': ['https:', 'blob:', 'data:'], 'worker-src': ['blob:'] }
+    : { 'default-src': ["'none'"], 'script-src': ["'unsafe-inline'", "'unsafe-eval'", 'blob:', 'data:'], 'style-src': ["'unsafe-inline'"], 'img-src': ['data:', 'blob:'], 'media-src': ['data:', 'blob:'], 'font-src': ['data:'], 'connect-src': ['blob:', 'data:'], 'worker-src': ['blob:'] };
+  allow.forEach(([dir, o]) => { (d[dir] ||= []).push(o); });
+  return '<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + Object.entries(d).map(([k, v]) => k + ' ' + v.join(' ')).join('; ') + '"><script>' + ERRJS + '<\/script>';
+};
+const SHIM = '(function(){function mk(init,save){var d={};for(var k in init)d[k]=init[k];var api={getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},setItem:function(k,v){d[k]=String(v);save(d)},removeItem:function(k){delete d[k];save(d)},clear:function(){d={};save(d)},key:function(i){var a=Object.keys(d);return a[i]===undefined?null:a[i]}};return new Proxy(api,{get:function(t,k){if(k==="length")return Object.keys(d).length;if(k in t)return t[k];return Object.prototype.hasOwnProperty.call(d,k)?d[k]:undefined},set:function(t,k,v){d[k]=String(v);save(d);return true},deleteProperty:function(t,k){delete d[k];save(d);return true},has:function(t,k){return k in t||k in d},ownKeys:function(){return Object.keys(d)},getOwnPropertyDescriptor:function(t,k){return k in d?{value:d[k],enumerable:true,configurable:true,writable:true}:undefined}})}var L=mk(window.__LS||{},function(d){parent.postMessage({xls:JSON.stringify(d)},"*")}),S=mk({},function(){});try{window.localStorage.getItem("x")}catch(e){try{Object.defineProperty(window,"localStorage",{configurable:true,get:function(){return L}});Object.defineProperty(window,"sessionStorage",{configurable:true,get:function(){return S}})}catch(e2){}}})();';
+function withCsp(h, ls, net = EXEC_NET, allow = []) {
+  const pre = cspFor(net, allow) + '<script>window.__LS=' + JSON.stringify(ls || {}).replace(/</g, '\\u003c') + ';' + SHIM + '<\/script>';
+  const m = h.match(/<head(?:\s[^>]*)?>/i);
+  if (m) return h.replace(m[0], () => m[0] + pre);
+  const d = h.match(/^\s*<!doctype[^>]*>/i);
+  if (d) return h.replace(d[0], () => d[0] + pre);
+  return '<!doctype html>' + pre + h;
+}
+// ---- робочий стіл: вільні вікна (перетягування, розтягування, перекриття, згортання) ----
+const desk = $('desk'), tray = $('tray');
+let zTop = 10, winN = 0;
+const visWins = () => [...desk.querySelectorAll('.xwin:not(.min)')];
+function focusWin(w) {
+  desk.querySelectorAll('.xwin.act').forEach(x => x.classList.remove('act'));
+  w.classList.add('act'); w.style.zIndex = ++zTop;
+  tray.querySelectorAll('.tb').forEach(b => b.classList.toggle('on', b._w === w));
+}
+function clampWin(w) {
+  if (w.classList.contains('max')) return;
+  const wd = parseFloat(w.style.width) || 300;
+  w.style.left = Math.min(Math.max(parseFloat(w.style.left) || 0, 80 - wd), innerWidth - 80) + 'px';
+  w.style.top = Math.min(Math.max(parseFloat(w.style.top) || 0, 0), innerHeight - 80) + 'px';
+}
+addEventListener('resize', () => desk.querySelectorAll('.xwin').forEach(clampWin));
+const xlog = [];
+addEventListener('message', e => {
+  if (e.data?.xls) { desk.querySelectorAll('.xwin').forEach(w => { if (w.querySelector('iframe').contentWindow === e.source) try { localStorage.setItem('xs:' + w._key, String(e.data.xls).slice(0, 500000)); } catch {} }); return; }
+  if (!e.data?.xerr) return; desk.querySelectorAll('.xwin').forEach(w => { if (w.querySelector('iframe').contentWindow === e.source) { const x = w.querySelector('.xerr'); x.hidden = false; x.textContent = '⚠ ' + String(e.data.xerr).slice(0, 300);
+    if (e.data.vd && e.data.bu && !w._net) {   // кнопка точкового дозволу: лише цей сайт і лише ця директива
+      let o = ''; try { const u = new URL(e.data.bu); if (/^https?:$/.test(u.protocol)) o = u.origin; } catch {}
+      const dir = String(e.data.vd).replace(/-(elem|attr)$/, '');
+      if (o && !w._allow.some(([dd, oo]) => dd === dir && oo === o)) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost'; b.style.cssText = 'padding:1px 8px;font-size:12px;margin-left:6px';
+        b.textContent = 'Дозволити лише ' + new URL(o).host;
+        b.onclick = () => { if (!confirm('Дозволити цьому вікну (' + dir + ') звертатись до ' + o + '?\nКод зможе надсилати туди дані.')) return; w._allow.push([dir, o]); w._run(); };
+        x.append(' ', b);
+      }
+    } xlog.push(w._name + ': ' + String(e.data.xerr).slice(0, 200)); if (xlog.length > 20) xlog.shift(); } }); });
+function createWin(code, name, o = {}) {
+  const w = document.createElement('div'); w.className = 'xwin';
+  w.innerHTML = '<div class="xbar"><span class="xt"></span><span class="xbtn"><button type="button" class="xc" title="Копіювати код">⧉</button><button type="button" class="xr" title="Перезапустити">↻</button><button type="button" class="xw" title="Дозволити інтернет цьому вікну (CDN, fetch, модулі з https)">🌐</button><button type="button" class="xo" title="Відкрити без обмежень у новій вкладці">↗</button><button type="button" class="xn" title="Згорнути">—</button><button type="button" class="xm" title="Розгорнути / відновити">▢</button><button type="button" class="xx" title="Закрити">✕</button></span></div><iframe title="HTML-вікно"></iframe><div class="xerr" hidden></div>'
+    + ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(d => '<i class="rz rz-' + d + '" data-d="' + d + '"></i>').join('');
+  const q = s => w.querySelector(s);
+  q('.xt').textContent = name;
+  const W = Math.min(440, innerWidth - 24), H = Math.min(340, Math.round(innerHeight * .55)), k = winN++ % 8;
+  w.style.cssText = 'width:' + W + 'px;height:' + H + 'px;left:' + Math.max(8, Math.min(innerWidth - W - 8, 16 + k * 28)) + 'px;top:' + Math.min(64 + k * 28, innerHeight - H - 56 > 8 ? innerHeight - H - 56 : 8) + 'px';
+  const fr = q('iframe'); fr.setAttribute('sandbox', EXEC_SANDBOX);
+  const run = () => {
+    q('.xerr').hidden = true;
+    let ls = {}; try { ls = JSON.parse(localStorage.getItem('xs:' + w._key) || '{}'); } catch {}
+    const html = withCsp(code, ls, w._net, w._allow);
+    if (EXEC_DATA && !dataBlocked && html.length < 1_400_000) { fr.removeAttribute('srcdoc'); fr.src = 'data:text/html;charset=utf-8;base64,' + toB64(new TextEncoder().encode(html)); w._data = true; }
+    else { fr.removeAttribute('src'); fr.srcdoc = html; w._data = false; }
+  };
+  w._run = run; w._code = code; w._name = name; w._net = EXEC_NET; w._allow = []; w._key = [...code].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + code.length;
+  const tb = document.createElement('button'); tb.type = 'button'; tb.className = 'tb'; tb.textContent = name; tb._w = w; tray.appendChild(tb); tray.hidden = false;
+  const restore = () => { w.classList.remove('min'); if (w._lazy) { w._lazy = false; run(); } focusWin(w); };
+  const minimize = () => { w.classList.add('min'); w.classList.remove('act'); tb.classList.remove('on'); };
+  tb.onclick = () => (w.classList.contains('min') || !w.classList.contains('act')) ? restore() : minimize();
+  q('.xr').onclick = run;
+  q('.xc').onclick = e => copyText(code, e.currentTarget);
+  const xw = q('.xw'); xw.classList.toggle('on', w._net);
+  xw.onclick = () => {
+    if (!w._net && !confirm('Дозволити цьому вікну інтернет (CDN, fetch, модулі з https)?\nКод зможе завантажувати зовнішні скрипти й надсилати дані на зовнішні сервери.')) return;
+    w._net = !w._net; xw.classList.toggle('on', w._net); run();
+  };
+  q('.xo').onclick = () => {
+    if (!confirm('Відкрити в новій вкладці БЕЗ ізоляції?\nКод отримає повний доступ (мережа, CDN, сховище) і працюватиме від імені цього сайту. Робіть це лише з кодом, якому довіряєте.')) return;
+    const u = URL.createObjectURL(new Blob([code], { type: 'text/html;charset=utf-8' })); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60000);
+  };
+  q('.xn').onclick = minimize;
+  q('.xm').onclick = () => { w.classList.toggle('max'); focusWin(w); };
+  q('.xx').onclick = () => { w.remove(); tb.remove(); tray.hidden = !tray.children.length; o.onClose?.(); };
+  w.addEventListener('pointerdown', () => focusWin(w), true);
+  const bar = q('.xbar');
+  bar.ondblclick = e => { if (!e.target.closest('button')) q('.xm').click(); };
+  bar.onpointerdown = e => {
+    if (e.target.closest('button') || w.classList.contains('max')) return;
+    e.preventDefault(); bar.setPointerCapture(e.pointerId);
+    const sx = e.clientX, sy = e.clientY, l = w.offsetLeft, t = w.offsetTop; w.classList.add('drag');
+    bar.onpointermove = v => { w.style.left = (l + v.clientX - sx) + 'px'; w.style.top = (t + v.clientY - sy) + 'px'; };
+    bar.onpointerup = bar.onpointercancel = () => { w.classList.remove('drag'); bar.onpointermove = null; clampWin(w); };
+  };
+  w.querySelectorAll('.rz').forEach(h => h.onpointerdown = e => {
+    e.preventDefault(); h.setPointerCapture(e.pointerId);
+    const d = h.dataset.d, sx = e.clientX, sy = e.clientY, l = w.offsetLeft, t = w.offsetTop, wd = w.offsetWidth, ht = w.offsetHeight; w.classList.add('drag');
+    h.onpointermove = v => {
+      const dx = v.clientX - sx, dy = v.clientY - sy; let nl = l, nt = t, nw = wd, nh = ht;
+      if (d.includes('e')) nw = Math.max(200, wd + dx);
+      if (d.includes('s')) nh = Math.max(140, ht + dy);
+      if (d.includes('w')) { nw = Math.max(200, wd - dx); nl = l + wd - nw; }
+      if (d.includes('n')) { nh = Math.max(140, ht - dy); nt = Math.max(0, t + ht - nh); }
+      Object.assign(w.style, { left: nl + 'px', top: nt + 'px', width: nw + 'px', height: nh + 'px' });
+    };
+    h.onpointerup = h.onpointercancel = () => { w.classList.remove('drag'); h.onpointermove = null; };
+  });
+  w._restore = restore;
+  desk.appendChild(w);
+  if (o.auto && visWins().length > MAX_AUTO_OPEN) { minimize(); w._lazy = true; } else { run(); focusWin(w); }
+  return w;
+}
+function execLauncher(code, name) {
+  const el = document.createElement('div'); el.className = 'xchip';
+  el.innerHTML = '<span class="xt"></span><button type="button" class="ghost">Відкрити вікно</button>';
+  el.firstChild.textContent = '▣ ' + name;
+  let win = null; const btn = el.querySelector('button');
+  const open = auto => {
+    if (win?.isConnected) { win._restore(); return; }
+    const inDlg = el.closest('dialog'); inDlg?.close();                      // модальне вікно пошуку перекривало б робочий стіл
+    win = createWin(code, name, { auto: auto && !inDlg, onClose: () => { btn.textContent = 'Відкрити вікно'; } });
+    btn.textContent = 'Розгорнути вікно';
+  };
+  btn.onclick = () => open(false);
+  el.start = () => { if (AUTORUN_EXEC) open(true); };
+  return el;
+}
+
+
+async function showFile(box, f, getData, x) {
+  const el = document.createElement('div'); el.className = 'att'; box.appendChild(el);
+  el.innerHTML = '<span class="fn">⏳ ' + esc(f.name) + '</span>';
+  const sp = el.firstChild, prog = (a, b) => sp.textContent = '⏳ ' + f.name + ' ' + a + '/' + b;
+  try {
+    let u8 = fromB64(await getData(prog)); if (f.c) u8 = await ungz(u8);
+    const blob = new Blob([u8], { type: f.type }), url = URL.createObjectURL(blob), t = f.type;
+    el.innerHTML = '';
+    if (t.startsWith('image/')) { const i = new Image(); i.src = url; i.alt = f.name; el.appendChild(i); }
+    else if (t.startsWith('video/')) { const v = document.createElement('video'); v.src = url; v.controls = true; el.appendChild(v); }
+    else if (t.startsWith('audio/')) { const a = document.createElement('audio'); a.src = url; a.controls = true; el.appendChild(a); }
+    else if (x && t === 'text/html') { const L = execLauncher(new TextDecoder().decode(u8), f.name); el.appendChild(L); L.start(); }
+    else if (t.startsWith('text/') && u8.length < 20000) { const p = document.createElement('pre'); p.textContent = new TextDecoder().decode(u8); el.appendChild(p); }
+    const a = document.createElement('a'); a.href = url; a.download = f.name; a.textContent = '⬇ ' + f.name + ' (' + Math.ceil(f.size / 1024) + ' КБ, ' + t + ')'; el.appendChild(a);
+  } catch (e) { el.textContent = 'Не вдалося завантажити ' + f.name; }
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function deleteMsg(m, kind, card) {
+  const dc = normDel(prompt('Введіть код видалення:') || '');
+  if (!dc) return;
+  try {
+    const k = await keyOf(m.n);
+    const tomb = kind === 'pub' ? { t: m.t, n: m.n, text: '', gone: dc } : { t: m.t, gone: dc };
+    await api(kind + '/' + k + '.json', 'PUT', tomb);          // правила приймають запис лише з правильним кодом
+    api('.json', 'PATCH', { ['blob/' + k]: null }).catch(() => {});
+    card.remove(); shown.delete(k);
+  } catch (e) { alert(/40[13]|Permission/.test(e.message) ? 'Невірний код видалення.' : e.message); }
+}
+function renderMsg(m, getData, kind) {
+  const d = document.createElement('article'); d.className = 'msg';
+  d.innerHTML = '<div class="meta"><span><span class="code"></span><button class="cp-ico cp" type="button" aria-label="Копіювати номер" title="Копіювати номер">⧉</button></span><span>' + fmt(m.t) + ' <button class="cp-ico ct" type="button" aria-label="Копіювати текст" title="Копіювати текст">❐</button><button class="cp-ico del" type="button" aria-label="Видалити" title="Видалити (потрібен код видалення)">✕</button></span></div><div class="text"></div>';
+  const ct = d.querySelector('.ct'); if (m.text) ct.onclick = async () => copyText(await getFull(), ct); else ct.remove();
+  const del = d.querySelector('.del'); if (m.n && kind) del.onclick = () => deleteMsg(m, kind, d); else del.remove();
+  d.querySelector('.code').textContent = '№ ' + (m.n || '—');
+  const cp = d.querySelector('.cp'); if (m.n) cp.onclick = () => copyText(m.n, cp); else cp.remove();
+  const tx = d.querySelector('.text'); linkify(tx, m.text || '');
+  let full = null;
+  const getFull = async note => {
+    if (!m.tx) return m.text || ''; if (full != null) return full;
+    const raw = fromB64(await getData('t', m.tx, (a, b) => { if (note) note.textContent = '⏳ ' + a + '/' + b; }));
+    full = new TextDecoder().decode(m.tx.c ? await ungz(raw) : raw); return full;
+  };
+  const more = m.tx ? Object.assign(document.createElement('button'), { type: 'button', className: 'ghost more', textContent: 'Показати повністю (' + m.tx.size + ' симв.)' }) : null;
+  if (more) { tx.after(more); more.onclick = async () => { more.textContent = '⏳…'; try { linkify(tx, await getFull(more)); tx.classList.add('open'); more.remove(); } catch { more.textContent = 'Не вдалося завантажити — повторити'; } }; }
+  tx.onclick = () => (more && full == null) ? more.click() : tx.classList.toggle('open');
+  if (!m.text) tx.remove();
+  (m.files || []).forEach((f, i) => showFile(d, f, prog => getData(i, f, prog), m.x));
+  return d;
+}
+
+// ---- стіна ----
+const shown = new Map();
+async function refreshWall() {
+  try {
+    const data = await api('pub.json?orderBy="t"&limitToLast=' + WALL_LIMIT) || {};
+    const wall = $('wall'), entries = Object.entries(data).filter(([, m]) => !m.gone).sort((a, b) => b[1].t - a[1].t);
+    for (const [k, el] of shown) if (!data[k] || data[k].gone) { el.remove(); shown.delete(k); }
+    for (const [k, m] of entries.reverse()) {
+      if (shown.has(k)) continue;
+      const el = renderMsg(m, (i, f, p) => fetchChunks(k, i, f.cn || 0, p), 'pub');
+      shown.set(k, el); wall.prepend(el);
+    }
+    $('empty').hidden = shown.size > 0;
+  } catch (e) { console.warn(e); }
+}
+
+// ---- нове повідомлення ----
+let files = [], curCode = '';
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  if (btn) { const o = btn.textContent, ico = btn.classList.contains('cp-ico'); btn.textContent = ico ? '✓' : 'Скопійовано ✓'; setTimeout(() => btn.textContent = o, 1500); }
+}
+let curDel = '';
+const genDel = () => { const a = crypto.getRandomValues(new Uint8Array(8)); const s = [...a].map(x => ALPH[x % 32]).join(''); return s.slice(0, 4) + '-' + s.slice(4); };
+const normDel = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+$('bNew').onclick = () => { $('err').textContent = ''; curCode = genCode(); curDel = genDel(); $('newCode').textContent = curCode; $('dNew').showModal(); };
+$('copyNew').onclick = e => copyText(curCode, e.currentTarget);
+
+// ---- QR (версія 1, корекція M, до 14 байт) ----
+function qrMatrix(text) {
+  const N = 21, bytes = [...new TextEncoder().encode(text)];
+  if (bytes.length > 14) throw new Error('Занадто довгий текст для QR');
+  const bits = [], push = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >>> i) & 1); };
+  push(4, 4); push(bytes.length, 8); bytes.forEach(b => push(b, 8)); push(0, Math.min(4, 128 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  const data = []; for (let i = 0; i < bits.length; i += 8) data.push(parseInt(bits.slice(i, i + 8).join(''), 2));
+  for (let p = 0; data.length < 16; p++) data.push(p % 2 ? 0x11 : 0xEC);
+  const mul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z; };
+  const deg = 10, div = new Array(deg - 1).fill(0); div.push(1);
+  for (let r = 1, i = 0; i < deg; i++) { for (let j = 0; j < deg; j++) { div[j] = mul(div[j], r); if (j + 1 < deg) div[j] ^= div[j + 1]; } r = mul(r, 2); }
+  const ec = new Array(deg).fill(0);
+  for (const b of data) { const f = b ^ ec.shift(); ec.push(0); div.forEach((c, i) => ec[i] ^= mul(c, f)); }
+  const cw = data.concat(ec);
+  const m = Array.from({ length: N }, () => new Array(N).fill(false)), fn = Array.from({ length: N }, () => new Array(N).fill(false));
+  const set = (x, y, v) => { m[y][x] = v; fn[y][x] = true; };
+  for (let i = 0; i < N; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+  for (const [cx, cy] of [[3, 3], [N - 4, 3], [3, N - 4]])
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const x = cx + dx, y = cy + dy, d = Math.max(Math.abs(dx), Math.abs(dy)); if (x >= 0 && x < N && y >= 0 && y < N) set(x, y, d !== 2 && d !== 4); }
+  const F = 0x5412, fb = i => ((F >>> i) & 1) === 1;
+  for (let i = 0; i <= 5; i++) set(8, i, fb(i));
+  set(8, 7, fb(6)); set(8, 8, fb(7)); set(7, 8, fb(8));
+  for (let i = 9; i < 15; i++) set(14 - i, 8, fb(i));
+  for (let i = 0; i < 8; i++) set(N - 1 - i, 8, fb(i));
+  for (let i = 8; i < 15; i++) set(8, N - 15 + i, fb(i));
+  set(8, N - 8, true);
+  let k = 0;
+  for (let right = N - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let v = 0; v < N; v++) for (let j = 0; j < 2; j++) {
+      const x = right - j, y = ((right + 1) & 2) === 0 ? N - 1 - v : v;
+      if (!fn[y][x] && k < cw.length * 8) { m[y][x] = ((cw[k >>> 3] >>> (7 - (k & 7))) & 1) === 1; k++; }
+    }
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!fn[y][x] && (x + y) % 2 === 0) m[y][x] = !m[y][x];
+  return m;
+}
+function showQR(text) {
+  const m = qrMatrix(text), N = m.length, q = 4, s = 8, cv = $('qrCv');
+  cv.width = cv.height = (N + 2 * q) * s;
+  const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height); c.fillStyle = '#000';
+  m.forEach((row, y) => row.forEach((v, x) => v && c.fillRect((x + q) * s, (y + q) * s, s, s)));
+  $('qrCode').textContent = text; $('qrDl').href = cv.toDataURL('image/png'); $('qrDl').download = 'qr-' + text + '.png';
+  $('dQR').showModal();
+}
+$('qrNew').onclick = () => showQR(curCode);
+$('qrClose').onclick = () => $('dQR').close();
+$('cNew').onclick = () => $('dNew').close();
+$('bAtt').onclick = () => $('file').click();
+$('file').onchange = e => { files.push(...e.target.files); e.target.value = ''; drawChips(); };
+function drawChips() { $('chips').innerHTML = files.map((f, i) => '<span>' + esc(f.name) + ' <a href="#" data-i="' + i + '" style="text-decoration:none">✕</a></span>').join(''); }
+$('chips').onclick = e => { const i = e.target.dataset?.i; if (i !== undefined) { e.preventDefault(); files.splice(+i, 1); drawChips(); } };
+const syncX = () => { $('txt').placeholder = $('xex').checked ? 'Вставте HTML+JS код (або прикріпіть .html файл)' : 'Текст повідомлення'; };
+$('txt').addEventListener('input', () => { if (!$('xex').checked && /^\s*<(!doctype|html)\b/i.test($('txt').value)) { $('xex').checked = true; syncX(); } });
+$('xex').onchange = syncX;
+$('aes').onchange = () => { const on = $('aes').checked; $('pw').hidden = !on; $('pub').disabled = on; if (on) $('pub').checked = false; };
+
+$('send').onclick = async () => {
+  const err = $('err'), btn = $('send'); err.textContent = '';
+  let text = $('txt').value.trim(); const isX = $('xex').checked, isEnc = $('aes').checked, isPub = $('pub').checked && !isEnc;
+  if (!text && !files.length) { err.textContent = 'Додайте текст або файл.'; return; }
+  if (isEnc && $('pw').value.length < 4) { err.textContent = 'Пароль має містити щонайменше 4 символи.'; return; }
+  btn.disabled = true; err.textContent = 'Стискаю та надсилаю…';
+  try {
+    const packed = [], toPack = [...files];
+    if (isX && text) { toPack.unshift(new File([text], 'app.html', { type: 'text/html' })); text = ''; }
+    if (isX && !toPack.some(f => /\.html?$/i.test(f.name))) throw new Error('Вставте HTML-код у текст або прикріпіть .html файл.');
+    for (const f of toPack) { err.textContent = 'Стискаю ' + f.name + '…'; const p = await packFile(f); if (isX && /\.html?$/i.test(f.name)) p.type = 'text/html'; packed.push(p); }
+    const code = curCode, k = await keyOf(code);
+    await api('.json', 'PATCH', { ['idx/' + k]: SV, ['secret/' + k]: normDel(curDel) });  // спершу індекс: якщо завантаження перерветься, сміття прибере автоочищення
+    let node, items;
+    if (isEnc) {
+      const e = await encryptPayload({ n: code, text, files: packed, ...(isX ? { x: 1 } : {}) }, $('pw').value);
+      items = [{ i: 0, d: e.d }]; node = { t: SV, enc: 1, s: e.s, iv: e.iv, cn: nChunks(e.d) };
+    } else {
+      items = packed.map((p, i) => ({ i, d: p.d }));
+      node = { t: SV, n: code, text, ...(isX ? { x: 1 } : {}), files: packed.map(({ d, ...meta }) => ({ ...meta, cn: nChunks(d) })) };
+      if (text.length > INLINE_TEXT) {   // довгий текст: початок у вузлі, решта шматками в blob/<ключ>/t/<n>
+        err.textContent = 'Стискаю текст…'; const tp = await packText(text);
+        node.text = text.slice(0, 300).trimEnd() + '…'; node.tx = { c: tp.c, size: text.length, cn: nChunks(tp.d) }; items.push({ i: 't', d: tp.d });
+      }
+    }
+    await uploadChunks(k, items, msg => err.textContent = msg);
+    await api((isPub ? 'pub/' : 'priv/') + k + '.json', 'PUT', node);                  // повідомлення з'являється лише коли всі шматки на місці
+    $('dNew').close(); $('xex').checked = false; syncX(); $('txt').value = ''; $('pw').value = ''; files = []; drawChips(); err.textContent = '';
+    $('doneCode').textContent = code; $('doneDel').textContent = curDel; $('dDone').showModal();
+    await cleanup(); refreshWall();
+  } catch (e) { err.textContent = e.message; }
+  btn.disabled = false;
+};
+$('copyCode').onclick = e => copyText($('doneCode').textContent, e.currentTarget);
+$('copyDel').onclick = e => copyText($('doneDel').textContent, e.currentTarget);
+$('okDone').onclick = () => $('dDone').close();
+
+// ---- пошук ----
+$('bSearch').onclick = () => { $('serr').textContent = ''; $('res').innerHTML = ''; $('dSearch').showModal(); };
+$('cSearch').onclick = () => $('dSearch').close();
+$('go').onclick = async () => {
+  const err = $('serr'), res = $('res'); err.textContent = ''; res.innerHTML = '';
+  const code = normCode($('qCode').value.trim());
+  if (code.length < 11) { err.textContent = 'Введіть повний номер.'; return; }
+  try {
+    const k = await keyOf(code);
+    const [p, q] = await Promise.all([api('pub/' + k + '.json'), api('priv/' + k + '.json')]);
+    if (p?.gone || q?.gone) { err.textContent = 'Це повідомлення видалено.'; return; }
+    if (p) { res.appendChild(renderMsg(p, (i, f, pr) => fetchChunks(k, i, f.cn || 0, pr), 'pub')); return; }
+    if (!q) { err.textContent = 'Повідомлення не знайдено (можливо, його вже видалено).'; return; }
+    if (q.enc) {
+      if (!$('qPw').value) { err.textContent = 'Повідомлення зашифроване — введіть пароль.'; return; }
+      err.textContent = 'Завантажую…';
+      const qd = { ...q, d: await fetchChunks(k, 0, q.cn || 0) }; err.textContent = '';
+      let m; try { m = await decryptPayload(qd, $('qPw').value); } catch { err.textContent = 'Невірний пароль.'; return; }
+      res.appendChild(renderMsg({ ...m, t: q.t }, i => m.files[i].d, 'priv'));
+    } else res.appendChild(renderMsg(q, (i, f, pr) => fetchChunks(k, i, f.cn || 0, pr), 'priv'));
+  } catch (e) { err.textContent = e.message; }
+};
+$('qCode').onkeydown = $('qPw').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+
+// ---- діагностика: що працює й що блокується у вікнах ----
+function probeBody(mode) {
+  const R = [], t = (n, f) => { try { const v = f(); R.push([n, true, v === undefined ? '' : String(v)]); } catch (e) { R.push([n, false, String((e && e.name) || e).slice(0, 40)]); } };
+  t('eval / new Function', () => new Function('return 1')());
+  t('eval()', () => eval('1+1'));
+  t('WebAssembly', () => { new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])); return 'ok'; });
+  t('localStorage', () => localStorage.getItem('x'));
+  t('sessionStorage', () => sessionStorage.getItem('x'));
+  t('indexedDB', () => { indexedDB.open('t'); });
+  t('cookie', () => document.cookie);
+  t('Worker (blob)', () => { const w = new Worker(URL.createObjectURL(new Blob(['0']))); w.terminate(); });
+  t('crypto.subtle', () => { if (!crypto.subtle) throw 'немає'; });
+  t('буфер обміну', () => { if (!navigator.clipboard) throw 'немає'; });
+  t('безпечний контекст', () => { if (!isSecureContext) throw 'ні'; });
+  let done = false; const end = () => { if (!done) { done = true; parent.postMessage({ diag: mode, r: R }, '*'); } };
+  try { fetch('https://www.gstatic.com/generate_204', { mode: 'no-cors' }).then(() => { R.push(['мережа (fetch на https)', true, '']); end(); }, () => { R.push(['мережа (fetch на https)', false, 'заблоковано']); end(); }); }
+  catch (e) { R.push(['мережа (fetch на https)', false, String(e)]); end(); }
+  setTimeout(end, 1500);
+}
+const probe = mode => new Promise(res => {
+  const f = document.createElement('iframe'); f.sandbox = 'allow-scripts'; f.hidden = true;
+  const h = withCsp('<script>(' + probeBody.toString() + ')("' + mode + '")<\/script>');
+  const done = r => { removeEventListener('message', on); f.remove(); res(r); };
+  const on = e => { if (e.source === f.contentWindow && e.data?.diag) done(e.data.r); };
+  addEventListener('message', on); setTimeout(() => done(null), 3500);
+  document.body.appendChild(f);
+  if (mode === 'data') f.src = 'data:text/html;charset=utf-8;base64,' + toB64(new TextEncoder().encode(h)); else f.srcdoc = h;
+});
+const SCAN = [
+  [/\beval\s*\(/, 'eval() — потребує дозволу eval'],
+  [/new\s+Function\s*\(/, 'new Function() — потребує дозволу eval'],
+  [/set(Timeout|Interval)\s*\(\s*['"`]/, 'setTimeout/setInterval з рядком — потребує дозволу eval'],
+  [/http-equiv\s*=\s*["']?content-security-policy/i, 'власний <meta> CSP у коді — може заборонити eval чи скрипти'],
+  [/<script[^>]+src\s*=\s*["']?(https?:)?\/\//i, 'зовнішній <script src> — блокується (немає мережі)'],
+  [/<link[^>]+href\s*=\s*["']?(https?:)?\/\//i, 'зовнішній <link> (стилі/шрифти) — блокується'],
+  [/\b(fetch|XMLHttpRequest|WebSocket|EventSource)\b/, 'мережеві запити — блокуються (кнопка 🌐 у заголовку вікна дозволяє https)'],
+  [/\b(localStorage|sessionStorage|indexedDB)\b/, 'localStorage/IndexedDB — недоступні в пісочниці; без try/catch скрипт падає'],
+  [/\b(alert|confirm|prompt)\s*\(/, 'alert/confirm/prompt — заблоковано пісочницею'],
+  [/window\.open|target\s*=\s*["']?_blank/, 'window.open / _blank — заблоковано'],
+  [/<form\b/i, '<form> — відправка заблокована'],
+  [/\bimport\s*\(|<script[^>]+type\s*=\s*["']?module/i, 'ES-модулі / import() — зовнішні модулі блокуються']
+];
+const fmtProbe = (title, r) => title + ':\n' + (!r ? '  ✗ вікно не відповіло — фрейм заблоковано (CSP сторінки: frame-src?)' : r.map(([n, ok, d]) => '  ' + (ok ? '✓ ' : '✗ ') + n + (d ? ' — ' + d : '')).join('\n'));
+$('bDiag').onclick = async () => {
+  const out = $('diagOut'), P = [], L = []; let hdr = '';
+  const show = () => { out.textContent = hdr + (P.length ? '\n\n' + P.join('\n\n') : ''); };
+  $('dDiag').showModal(); out.textContent = 'Перевіряю…';
+  L.push('Версія файлу: 2026-11-03-vitrina');
+  L.push('Адреса: ' + location.origin + (isSecureContext ? ' (безпечний контекст)' : ' (НЕбезпечний контекст)'));
+  try { new Function('return 1')(); L.push('Сторінка: eval дозволено'); } catch { L.push('Сторінка: eval ЗАБЛОКОВАНО'); }
+  L.push('<meta> CSP у сторінці: ' + (document.querySelector('meta[http-equiv="Content-Security-Policy" i]') ? 'є' : 'немає'));
+  try { const r = await fetch(location.href, { method: 'HEAD', cache: 'no-store' }); L.push('Заголовок CSP: ' + (r.headers.get('content-security-policy') || 'немає')); }
+  catch { L.push('Заголовок CSP: не вдалося перевірити (файл відкрито не через http/https?)'); }
+  hdr = L.join('\n'); show();
+  P.push(fmtProbe('Тест у вікні (data:-URL)', await probe('data'))); show();
+  P.push(fmtProbe('Тест у вікні (srcdoc)', await probe('srcdoc'))); show();
+  const W = [...desk.querySelectorAll('.xwin')];
+  P.push('Відкриті вікна: ' + (W.length || 'немає') + W.map(w => {
+    const f = SCAN.filter(([re]) => re.test(w._code)).map(([, m]) => '    • ' + m);
+    return '\n— ' + w._name + ' (' + (w._data === undefined ? 'ще не запускалось' : w._data ? 'data:' : 'srcdoc') + ', ' + Math.ceil(w._code.length / 1024) + ' КБ)' + (f.length ? ':\n' + f.join('\n') : ': у коді нічого, що блокується, не знайдено') + '\n    стан: ' + w.className + ' | iframe ' + (r => Math.round(r.width) + '×' + Math.round(r.height))(w.querySelector('iframe').getBoundingClientRect()) + ' | помилка: ' + (w.querySelector('.xerr').hidden ? 'немає' : w.querySelector('.xerr').textContent) + '\n    початок коду: ' + JSON.stringify(w._code.slice(0, 140));
+  }).join(''));
+  P.push('Помилки з вікон (останні): ' + (xlog.length ? '\n' + xlog.slice(-8).map(x => '  • ' + x).join('\n') : 'поки немає'));
+  P.push('Як читати: localStorage / sessionStorage / cookie у вікнах замінені тимчасовими (живуть у пам’яті вікна й зникають при закритті); IndexedDB недоступний (так задумано для безпеки). ✗ на мережі — вікна без інтернету; кнопка 🌐 у заголовку вікна дозволяє https. Пункти зі списку «Відкриті вікна» — саме те, що в коді вікна може зламати скрипт.');
+  show();
+};
+$('cDiag').onclick = () => $('dDiag').close();
+$('bCopyDiag').onclick = e => copyText($('diagOut').textContent, e.currentTarget);
+$('bTest').onclick = () => {
+  $('dDiag').close();
+  const code = '<!doctype html><html><body style="font:18px sans-serif;padding:10px"><h2 id=h>JS не запущено ✗</h2><button id=b>Натисни</button><p id=s></p><script>document.getElementById("h").textContent="✓ JS працює";var n=0;document.getElementById("b").onclick=function(){this.textContent="Натиснуто "+(++n)};var r="localStorage: ";try{localStorage.setItem("t","1");r+="ok"}catch(e){r+=e.name}document.getElementById("s").textContent=r;<\/script></body></html>';
+  const w = createWin(code, 'тест.html', {}); w.classList.remove('min'); focusWin(w);
+};
+
+// ================= ВІТРИНА: проєкти адміністраторів =================
+const randHex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
+async function derivePw(aid, pw) {     // пароль → ключ доступу (PBKDF2); сам пароль нікуди не передається й не зберігається
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: new TextEncoder().encode('stina-admin-v1:' + aid), iterations: 200000, hash: 'SHA-256' }, km, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const AID_RE = /^[\p{L}\p{N}_-]{2,24}$/u, isAuthErr = e => /40[13]|Permission/.test(e.message);
+let adm = null; try { adm = JSON.parse(sessionStorage.getItem('adm') || 'null'); } catch {}
+let view = 'wall';
+function syncAdm() {
+  document.body.classList.toggle('isadm', !!adm); document.body.classList.toggle('ismaster', adm?.aid === 'master');
+  $('bAdm').textContent = adm ? 'Вийти (' + adm.aid + ')' : 'Адмін'; $('bPost').hidden = !adm; $('bAdmins').hidden = adm?.aid !== 'master';
+}
+function setView(v) {
+  view = v; $('mWall').hidden = v !== 'wall'; $('mVit').hidden = v !== 'vit';
+  $('tWall').classList.toggle('on', v === 'wall'); $('tVit').classList.toggle('on', v === 'vit');
+  $('bNew').hidden = $('bSearch').hidden = v !== 'wall'; if (v === 'vit') refreshVit();
+}
+$('tWall').onclick = () => setView('wall'); $('tVit').onclick = () => setView('vit');
+
+// вхід
+$('bAdm').onclick = () => {
+  if (adm) { adm = null; try { sessionStorage.removeItem('adm'); } catch {} syncAdm(); return; }
+  $('aerr').textContent = ''; $('aPass').value = ''; $('dAdm').showModal();
+};
+$('aCancel').onclick = () => $('dAdm').close();
+$('aGo').onclick = async () => {
+  const err = $('aerr'), aid = $('aLog').value.trim().toLowerCase(), pw = $('aPass').value;
+  if (aid !== 'master' && !AID_RE.test(aid)) { err.textContent = 'Невірний логін.'; return; }
+  if (!pw) { err.textContent = 'Введіть пароль.'; return; }
+  err.textContent = 'Перевіряю…'; $('aGo').disabled = true;
+  try {
+    const h = await derivePw(aid, pw), chk = 'chk' + randHex(6);
+    await api('vauth/' + chk + '.json', 'PUT', { a: aid, p: h });        // база приймає запис лише з правильним паролем
+    api('vauth/' + chk + '.json', 'DELETE').catch(() => {});
+    adm = { aid, h }; try { sessionStorage.setItem('adm', JSON.stringify(adm)); } catch {}
+    syncAdm(); $('dAdm').close(); $('aPass').value = '';
+  } catch (e) { err.textContent = isAuthErr(e) ? 'Невірний логін або пароль.' : e.message; }
+  $('aGo').disabled = false;
+};
+$('aPass').onkeydown = e => { if (e.key === 'Enter') $('aGo').click(); };
+
+// список
+const vShown = new Map();
+async function refreshVit() {
+  try {
+    const data = await api('vit.json?orderBy="t"&limitToLast=100') || {};
+    for (const [k, el] of vShown) if (!data[k]) { el.remove(); vShown.delete(k); }
+    for (const [k, p] of Object.entries(data).sort((a, b) => b[1].t - a[1].t).reverse()) {
+      if (vShown.has(k)) continue;
+      const el = renderPost(p, k); vShown.set(k, el); $('vgrid').prepend(el);
+    }
+    $('vempty').hidden = vShown.size > 0;
+  } catch (e) { console.warn(e); }
+}
+function renderPost(p, k) {
+  const d = document.createElement('article'); d.className = 'msg post'; d.dataset.a = p.a || '';
+  d.innerHTML = '<h3 class="ptitle"></h3><div class="meta"><span class="pauth"></span><span>' + fmt(p.t) + ' <button class="cp-ico ct" type="button" aria-label="Копіювати текст" title="Копіювати текст">❐</button><button class="cp-ico del" type="button" aria-label="Видалити" title="Видалити проєкт (адміністратор)">✕</button></span></div><div class="text"></div>';
+  d.querySelector('.ptitle').textContent = p.title || '';
+  d.querySelector('.pauth').textContent = (p.a === 'master' ? '★ ' : '') + (p.an || p.a || '');
+  const tx = d.querySelector('.text'), ct = d.querySelector('.ct'); linkify(tx, p.text || '');
+  let full = null;
+  const getFull = async note => {
+    if (!p.tx) return p.text || ''; if (full != null) return full;
+    const raw = fromB64(await fetchChunks(k, 't', p.tx.cn, (a, b) => { if (note) note.textContent = '⏳ ' + a + '/' + b; }, 'vblob'));
+    full = new TextDecoder().decode(p.tx.c ? await ungz(raw) : raw); return full;
+  };
+  const more = p.tx ? Object.assign(document.createElement('button'), { type: 'button', className: 'ghost more', textContent: 'Показати повністю (' + p.tx.size + ' симв.)' }) : null;
+  if (more) { tx.after(more); more.onclick = async () => { more.textContent = '⏳…'; try { linkify(tx, await getFull(more)); tx.classList.add('open'); more.remove(); } catch { more.textContent = 'Не вдалося завантажити — повторити'; } }; }
+  tx.onclick = () => (more && full == null) ? more.click() : tx.classList.toggle('open');
+  if (p.text) ct.onclick = async () => copyText(await getFull(), ct); else { ct.remove(); tx.remove(); }
+  d.querySelector('.del').onclick = () => deletePost(k, p, d);
+  (p.files || []).forEach((f, i) => showFile(d, f, prog => fetchChunks(k, i, f.cn || 0, prog, 'vblob'), p.x));
+  return d;
+}
+
+// публікація
+let pfiles = [];
+const drawPChips = () => { $('pChips').innerHTML = pfiles.map((f, i) => '<span>' + esc(f.name) + ' <a href="#" data-i="' + i + '" style="text-decoration:none">✕</a></span>').join(''); };
+$('pChips').onclick = e => { const i = e.target.dataset?.i; if (i !== undefined) { e.preventDefault(); pfiles.splice(+i, 1); drawPChips(); } };
+$('pAtt').onclick = () => $('pFile').click();
+$('pFile').onchange = e => { pfiles.push(...e.target.files); e.target.value = ''; drawPChips(); };
+$('pText').addEventListener('input', () => { if (!$('pX').checked && /^\s*<(!doctype|html)\b/i.test($('pText').value)) $('pX').checked = true; });
+$('bPost').onclick = () => { $('perr').textContent = ''; $('dPost').showModal(); };
+$('pCancel').onclick = () => $('dPost').close();
+$('pSend').onclick = async () => {
+  const err = $('perr'), btn = $('pSend'); err.textContent = '';
+  if (!adm) { err.textContent = 'Спершу увійдіть як адміністратор.'; return; }
+  const title = $('pTitle').value.trim(), isX = $('pX').checked; let text = $('pText').value.trim();
+  if (!title) { err.textContent = 'Введіть назву проєкту.'; return; }
+  if (!text && !pfiles.length) { err.textContent = 'Додайте опис або файли.'; return; }
+  btn.disabled = true; err.textContent = 'Готую…';
+  const pid = randHex(8);
+  try {
+    const toPack = [...pfiles];
+    if (isX && text) { toPack.unshift(new File([text], 'app.html', { type: 'text/html' })); text = ''; }
+    if (isX && !toPack.some(f => /\.html?$/i.test(f.name))) throw new Error('Вставте HTML-код в опис або прикріпіть .html файл.');
+    const packed = [];
+    for (const f of toPack) { err.textContent = 'Стискаю ' + f.name + '…'; const p = await packFile(f); if (isX && /\.html?$/i.test(f.name)) p.type = 'text/html'; packed.push(p); }
+    const items = packed.map((p, i) => ({ i, d: p.d }));
+    const node = { a: adm.aid, an: adm.aid, t: SV, title, text, ...(isX ? { x: 1 } : {}), files: packed.map(({ d, ...m }) => ({ ...m, cn: nChunks(d) })) };
+    if (text.length > INLINE_TEXT) { const tp = await packText(text); node.text = text.slice(0, 300).trimEnd() + '…'; node.tx = { c: tp.c, size: text.length, cn: nChunks(tp.d) }; items.push({ i: 't', d: tp.d }); }
+    await api('vauth/' + pid + '.json', 'PUT', { a: adm.aid, p: adm.h });   // крок 1: підтвердження пароля
+    try { await uploadChunks(pid, items, m => err.textContent = m, 'vblob'); await api('vit/' + pid + '.json', 'PUT', node); }   // крок 2: файли, крок 3: сам допис
+    catch (e) { api('.json', 'PATCH', { ['vblob/' + pid]: null, ['vauth/' + pid]: null }).catch(() => {}); throw e; }
+    $('dPost').close(); $('pTitle').value = ''; $('pText').value = ''; $('pX').checked = false; pfiles = []; drawPChips(); err.textContent = '';
+    refreshVit();
+  } catch (e) { err.textContent = isAuthErr(e) ? 'Доступ відхилено — увійдіть знову.' : e.message; }
+  btn.disabled = false;
+};
+
+// видалення
+async function deletePost(k, p, card) {
+  if (!adm) return;
+  if (!confirm('Видалити проєкт «' + (p.title || '') + '» назавжди?')) return;
+  try {
+    await api('vdel/' + k + '.json', 'PUT', { a: adm.aid, p: adm.h });      // дозвіл на видалення (перевіряється базою)
+    try { await api('vit/' + k + '.json', 'DELETE'); }
+    catch (e) { api('vdel/' + k + '.json', 'DELETE').catch(() => {}); throw e; }
+    api('.json', 'PATCH', { ['vblob/' + k]: null, ['vauth/' + k]: null, ['vdel/' + k]: null }).catch(() => {});
+    card.remove(); vShown.delete(k); $('vempty').hidden = vShown.size > 0;
+  } catch (e) { alert(isAuthErr(e) ? 'Недостатньо прав: цей проєкт не можна видалити з вашим доступом.' : e.message); }
+}
+
+// керування адміністраторами (лише master)
+const genPw = () => [...crypto.getRandomValues(new Uint8Array(14))].map(x => ALPH[x % 32]).join('');
+$('bAdmins').onclick = () => { $('nerr').textContent = ''; $('nok').textContent = ''; $('dAdmins').showModal(); };
+$('nClose').onclick = () => $('dAdmins').close();
+$('nGen').onclick = () => { $('nPw').value = genPw(); };
+$('nGo').onclick = async () => {
+  const err = $('nerr'), ok = $('nok'), aid = $('nLog').value.trim().toLowerCase(), pw = $('nPw').value; err.textContent = ''; ok.textContent = '';
+  if (adm?.aid !== 'master') { err.textContent = 'Лише майстер-адмін може керувати адміністраторами.'; return; }
+  if (aid === 'master' || !AID_RE.test(aid)) { err.textContent = 'Логін: 2–24 символи (літери, цифри, _ -), не «master».'; return; }
+  if (pw.length < 8) { err.textContent = 'Пароль має містити щонайменше 8 символів.'; return; }
+  $('nGo').disabled = true; err.textContent = 'Зберігаю…';
+  try {
+    const h = await derivePw(aid, pw);
+    await api('admins/' + encodeURIComponent(aid) + '.json', 'PUT', { h, mp: adm.h });
+    err.textContent = ''; ok.textContent = 'Готово. Логін: ' + aid + '  Пароль: ' + pw + '\nПередайте їх адміністратору. Пароль відновити неможливо — лише задати новий тим самим логіном.';
+    $('nPw').value = '';
+  } catch (e) { err.textContent = isAuthErr(e) ? 'Доступ відхилено — увійдіть як master знову.' : e.message; }
+  $('nGo').disabled = false;
+};
+
+// ---- старт ----
+syncAdm(); refreshWall(); setInterval(() => { if (!document.hidden) refreshWall(); }, POLL_MS);
+setInterval(() => { if (!document.hidden && view === 'vit') refreshVit(); }, 8000);
+</script>
+</body>
+</html>
