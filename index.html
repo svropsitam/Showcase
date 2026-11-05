@@ -39,6 +39,7 @@ main{padding-bottom:56px}
 .vbar{display:flex;gap:8px;justify-content:flex-end;padding:8px 16px 0;max-width:1200px;margin:auto}
 #vempty{text-align:center;color:var(--mute);padding:40px}
 .derr{color:var(--warn);min-height:1.4em;font-size:14px;margin-top:6px}
+#dView{width:min(720px,96vw);max-height:92vh;overflow:auto}#dView .msg{margin:0;border:0;padding:0}
 .post .ptitle{margin:0 0 4px;font-size:18px;line-height:1.25}
 .post .del{display:none}.isadm .post:not([data-a="master"]) .del,.ismaster .post .del{display:inline-block}
 #desk{position:fixed;inset:0;z-index:20;pointer-events:none;--tray:48px}
@@ -149,6 +150,8 @@ textarea{min-height:110px;resize:vertical}
   <div id="nerr" class="derr"></div>
   <div id="nok" class="fn" style="white-space:pre-wrap;user-select:all"></div>
   <div class="row" style="justify-content:flex-end"><button class="ghost" id="nClose" type="button">Закрити</button><button id="nGo" type="button">Зберегти</button></div></dialog>
+
+<dialog id="dView"><div id="vwrap"></div><div class="row" style="justify-content:flex-end"><button class="ghost" id="vClose" type="button">Закрити</button></div></dialog>
 
 <dialog id="dDiag"><h2>Діагностика CSP</h2><pre id="diagOut" style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:10px 0"></pre><div class="row" style="justify-content:flex-end"><button class="ghost" id="bCopyDiag">Копіювати звіт</button><button class="ghost" id="bTest">Тестове вікно</button><button id="cDiag">Закрити</button></div></dialog>
 <div id="desk"></div><div id="tray" hidden></div>
@@ -397,7 +400,7 @@ function execLauncher(code, name) {
 }
 
 
-async function showFile(box, f, getData, x) {
+async function showFile(box, f, getData, x, lnk) {
   const el = document.createElement('div'); el.className = 'att'; box.appendChild(el);
   el.innerHTML = '<span class="fn">⏳ ' + esc(f.name) + '</span>';
   const sp = el.firstChild, prog = (a, b) => sp.textContent = '⏳ ' + f.name + ' ' + a + '/' + b;
@@ -411,6 +414,7 @@ async function showFile(box, f, getData, x) {
     else if (x && t === 'text/html') { const L = execLauncher(new TextDecoder().decode(u8), f.name); el.appendChild(L); L.start(); }
     else if (t.startsWith('text/') && u8.length < 20000) { const p = document.createElement('pre'); p.textContent = new TextDecoder().decode(u8); el.appendChild(p); }
     const a = document.createElement('a'); a.href = url; a.download = f.name; a.textContent = '⬇ ' + f.name + ' (' + Math.ceil(f.size / 1024) + ' КБ, ' + t + ')'; el.appendChild(a);
+    if (lnk) { const b = document.createElement('button'); b.type = 'button'; b.className = 'cp-ico'; b.textContent = '🔗'; b.title = 'Копіювати посилання на файл'; b.onclick = () => copyText(lnk, b); el.appendChild(b); }
   } catch (e) { el.textContent = 'Не вдалося завантажити ' + f.name; }
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -726,7 +730,7 @@ async function refreshVit() {
 }
 function renderPost(p, k) {
   const d = document.createElement('article'); d.className = 'msg post'; d.dataset.a = p.a || '';
-  d.innerHTML = '<h3 class="ptitle"></h3><div class="meta"><span class="pauth"></span><span>' + fmt(p.t) + ' <button class="cp-ico ct" type="button" aria-label="Копіювати текст" title="Копіювати текст">❐</button><button class="cp-ico del" type="button" aria-label="Видалити" title="Видалити проєкт (адміністратор)">✕</button></span></div><div class="text"></div>';
+  d.innerHTML = '<h3 class="ptitle"></h3><div class="meta"><span class="pauth"></span><span>' + fmt(p.t) + ' <button class="cp-ico lk" type="button" aria-label="Копіювати посилання" title="Копіювати посилання на проєкт">🔗</button><button class="cp-ico ct" type="button" aria-label="Копіювати текст" title="Копіювати текст">❐</button><button class="cp-ico del" type="button" aria-label="Видалити" title="Видалити проєкт (адміністратор)">✕</button></span></div><div class="text"></div>';
   d.querySelector('.ptitle').textContent = p.title || '';
   d.querySelector('.pauth').textContent = (p.a === 'master' ? '★ ' : '') + (p.an || p.a || '');
   const tx = d.querySelector('.text'), ct = d.querySelector('.ct'); linkify(tx, p.text || '');
@@ -740,8 +744,9 @@ function renderPost(p, k) {
   if (more) { tx.after(more); more.onclick = async () => { more.textContent = '⏳…'; try { linkify(tx, await getFull(more)); tx.classList.add('open'); more.remove(); } catch { more.textContent = 'Не вдалося завантажити — повторити'; } }; }
   tx.onclick = () => (more && full == null) ? more.click() : tx.classList.toggle('open');
   if (p.text) ct.onclick = async () => copyText(await getFull(), ct); else { ct.remove(); tx.remove(); }
+  const lk = d.querySelector('.lk'); lk.onclick = () => copyText(vlink('p', k), lk);
   d.querySelector('.del').onclick = () => deletePost(k, p, d);
-  (p.files || []).forEach((f, i) => showFile(d, f, prog => fetchChunks(k, i, f.cn || 0, prog, 'vblob'), p.x));
+  (p.files || []).forEach((f, i) => showFile(d, f, prog => fetchChunks(k, i, f.cn || 0, prog, 'vblob'), p.x, vlink('f', k, i)));
   return d;
 }
 
@@ -813,8 +818,31 @@ $('nGo').onclick = async () => {
   $('nGo').disabled = false;
 };
 
+
+// ---- посилання на проєкт чи файл вітрини: https://…/#/p/<id> (проєкт) і #/f/<id>/<номер файлу> (файл) ----
+const vlink = (t, k, i) => location.origin + location.pathname + '#/' + t + '/' + k + (i != null ? '/' + i : '');
+$('vClose').onclick = () => $('dView').close();
+async function routeHash() {
+  const m = location.hash.match(/^#\/(p|f)\/([0-9a-f]{16})(?:\/(\d+))?$/i); if (!m) return;
+  const k = m[2].toLowerCase(); setView('vit');
+  try {
+    const p = await api('vit/' + k + '.json');
+    if (!p) { alert('Цей проєкт видалено, або посилання хибне.'); return; }
+    $('vwrap').replaceChildren();
+    if (m[1] === 'p' || m[3] == null) { $('vwrap').append(renderPost(p, k)); $('dView').showModal(); return; }
+    const i = +m[3], f = (p.files || [])[i]; if (!f) { alert('Файл у цьому проєкті не знайдено.'); return; }
+    if (f.type === 'text/html') {          // програма: одразу на весь екран, в ізольованому вікні
+      let u8 = fromB64(await fetchChunks(k, i, f.cn || 0, null, 'vblob')); if (f.c) u8 = await ungz(u8);
+      const w = createWin(new TextDecoder().decode(u8), f.name, {}); w.classList.add('max'); focusWin(w);
+    } else {                               // зображення, відео, аудіо, PDF/інше: переглядач
+      const box = document.createElement('div'); box.innerHTML = '<h3 class="ptitle"></h3>'; box.firstChild.textContent = p.title + ' — ' + f.name; $('vwrap').append(box);
+      showFile(box, f, prog => fetchChunks(k, i, f.cn || 0, prog, 'vblob'), false, vlink('f', k, i)); $('dView').showModal();
+    }
+  } catch (e) { alert(e.message); }
+}
+addEventListener('hashchange', routeHash);
 // ---- старт ----
-syncAdm(); refreshWall(); setInterval(() => { if (!document.hidden) refreshWall(); }, POLL_MS);
+syncAdm(); routeHash(); refreshWall(); setInterval(() => { if (!document.hidden) refreshWall(); }, POLL_MS);
 setInterval(() => { if (!document.hidden && view === 'vit') refreshVit(); }, 8000);
 </script>
 </body>
