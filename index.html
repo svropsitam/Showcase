@@ -141,8 +141,8 @@ textarea{min-height:110px;resize:vertical}
   <textarea id="pText" style="margin-top:8px" placeholder="Опис (без обмежень довжини; посилання клікаються)"></textarea>
   <div class="row"><button class="ghost" id="pAtt" type="button">📎 Файли</button><input type="file" id="pFile" multiple hidden><div class="chips" id="pChips"></div></div>
   <div class="row"><label><input type="checkbox" id="pX"> HTML+JS: відкривати як вікно-програму</label></div>
-  <div class="row"><label><input type="checkbox" id="pH"> 🔒 Прихований розділ (AES-256, лише за посиланням)</label></div>
-  <div id="pHbox" hidden><input type="password" id="pPw" placeholder="Пароль для шифрування (від 6 символів)" autocomplete="new-password"><input type="password" id="pPw2" placeholder="Повторіть пароль" style="margin-top:8px" autocomplete="new-password"><p class="fn">Пароль відновити неможливо. Передавайте його одержувачу окремо від посилання.</p></div>
+  <div class="row"><label><input type="checkbox" id="pH"> 🔒 Прихований: відкривається лише за посиланням</label></div>
+  <div id="pHbox" hidden><p class="fn" style="margin:2px 0 6px">Вміст шифрується AES-256. Без пароля ключ вбудовується в посилання: хто має посилання, той відкриє одразу, без пароля. За бажанням додайте пароль (від 6 символів) — тоді його попросять при відкритті.</p><input type="password" id="pPw" placeholder="Пароль (необов'язково)" autocomplete="new-password"><input type="password" id="pPw2" placeholder="Повторіть пароль" style="margin-top:8px" autocomplete="new-password"></div>
   <div id="perr" class="derr"></div>
   <div class="row" style="justify-content:flex-end"><button class="ghost" id="pCancel" type="button">Скасувати</button><button id="pSend" type="button">Опублікувати</button></div></dialog>
 
@@ -158,8 +158,8 @@ textarea{min-height:110px;resize:vertical}
   <input type="password" id="pwIn" placeholder="Пароль" autocomplete="off"><div id="pwErr" class="derr"></div>
   <div class="row" style="justify-content:flex-end"><button class="ghost" id="pwCancel" type="button">Скасувати</button><button id="pwGo" type="button">Відкрити</button></div></dialog>
 
-<dialog id="dLink"><h2>Прихований проєкт опубліковано</h2><p class="fn">Посилання (без пароля воно нічого не показує):</p>
-  <p class="code" id="lkTxt" style="word-break:break-all;user-select:all"></p><p class="fn">Пароль передайте окремо. Відновити його неможливо.</p>
+<dialog id="dLink"><h2>Прихований проєкт опубліковано</h2><p class="fn" id="lkHead"></p>
+  <p class="code" id="lkTxt" style="word-break:break-all;user-select:all"></p><p class="fn" id="lkNote"></p>
   <div class="row" style="justify-content:flex-end"><button class="ghost" id="lkCopy" type="button">Копіювати посилання</button><button id="lkOk" type="button">Гаразд</button></div></dialog>
 
 <dialog id="dMine"><h2>🔒 Мої приховані проєкти</h2><div id="mineList" style="margin:10px 0"></div><div id="mineErr" class="derr"></div>
@@ -660,7 +660,7 @@ $('bDiag').onclick = async () => {
   const out = $('diagOut'), P = [], L = []; let hdr = '';
   const show = () => { out.textContent = hdr + (P.length ? '\n\n' + P.join('\n\n') : ''); };
   $('dDiag').showModal(); out.textContent = 'Перевіряю…';
-  L.push('Версія файлу: 2026-11-03-hidden');
+  L.push('Версія файлу: 2026-11-07-linkonly');
   L.push('Адреса: ' + location.origin + (isSecureContext ? ' (безпечний контекст)' : ' (НЕбезпечний контекст)'));
   try { new Function('return 1')(); L.push('Сторінка: eval дозволено'); } catch { L.push('Сторінка: eval ЗАБЛОКОВАНО'); }
   L.push('<meta> CSP у сторінці: ' + (document.querySelector('meta[http-equiv="Content-Security-Policy" i]') ? 'є' : 'немає'));
@@ -758,9 +758,9 @@ function renderPost(p, k, o = {}) {
   if (more) { tx.after(more); more.onclick = async () => { more.textContent = '⏳…'; try { linkify(tx, await getFull(more)); tx.classList.add('open'); more.remove(); } catch { more.textContent = 'Не вдалося завантажити — повторити'; } }; }
   tx.onclick = () => (more && full == null) ? more.click() : tx.classList.toggle('open');
   if (p.text) ct.onclick = async () => copyText(await getFull(), ct); else { ct.remove(); tx.remove(); }
-  const lk = d.querySelector('.lk'); lk.onclick = () => copyText(vlink(o.hid ? 'h' : 'p', k), lk);
+  const lk = d.querySelector('.lk'); lk.onclick = () => copyText(vlink(o.hid ? 'h' : 'p', k, null, o.key), lk);
   d.querySelector('.del').onclick = () => deletePost(k, p, d, o.hid ? 'vhid' : 'vit');
-  (p.files || []).forEach((f, i) => showFile(d, f, prog => o.hid ? Promise.resolve(f.d) : fetchChunks(k, i, f.cn || 0, prog, 'vblob'), p.x, vlink(o.hid ? 'h' : 'f', k, i)));
+  (p.files || []).forEach((f, i) => showFile(d, f, prog => o.hid ? Promise.resolve(f.d) : fetchChunks(k, i, f.cn || 0, prog, 'vblob'), p.x, vlink(o.hid ? 'h' : 'f', k, i, o.key)));
   return d;
 }
 
@@ -780,8 +780,9 @@ $('pSend').onclick = async () => {
   if (!title) { err.textContent = 'Введіть назву проєкту.'; return; }
   if (!text && !pfiles.length) { err.textContent = 'Додайте опис або файли.'; return; }
   const isH = $('pH').checked, hpw = $('pPw').value;
-  if (isH && hpw.length < 6) { err.textContent = 'Пароль для шифрування — щонайменше 6 символів.'; return; }
-  if (isH && hpw !== $('pPw2').value) { err.textContent = 'Паролі не збігаються.'; return; }
+  if (isH && hpw && hpw.length < 6) { err.textContent = 'Пароль — щонайменше 6 символів (або залиште порожнім: доступ лише за посиланням).'; return; }
+  if (isH && hpw && hpw !== $('pPw2').value) { err.textContent = 'Паролі не збігаються.'; return; }
+  const hkey = isH && !hpw ? randHex(16) : '';   // без пароля: випадковий ключ іде в саме посилання
   btn.disabled = true; err.textContent = 'Готую…';
   const pid = randHex(8);
   try {
@@ -794,7 +795,7 @@ $('pSend').onclick = async () => {
     const ik = isH ? await getIk() : null;
     if (isH) {                              // усе (назва, опис, файли) шифрується AES-256 у браузері ще до відправки
       err.textContent = 'Шифрую (AES-256)…';
-      const e = await encryptPayload({ title, text, files: packed, ...(isX ? { x: 1 } : {}) }, hpw);
+      const e = await encryptPayload({ title, text, files: packed, ...(isX ? { x: 1 } : {}) }, hpw || hkey);
       items = [{ i: 0, d: e.d }]; node = { a: adm.aid, an: adm.aid, t: SV, enc: 1, s: e.s, iv: e.iv, cn: nChunks(e.d) };
     } else {
       node = { a: adm.aid, an: adm.aid, t: SV, title, text, ...(isX ? { x: 1 } : {}), files: packed.map(({ d, ...m }) => ({ ...m, cn: nChunks(d) })) };
@@ -803,11 +804,11 @@ $('pSend').onclick = async () => {
     await api('vauth/' + pid + '.json', 'PUT', { a: adm.aid, p: adm.h });   // крок 1: підтвердження пароля адміна
     try {
       await uploadChunks(pid, items, m => err.textContent = m, 'vblob');       // крок 2: файли шматками
-      if (isH) await api('vhidx/' + ik + '/' + pid + '.json', 'PUT', { t: SV, ti: title.slice(0, 120) });   // особистий список адміна
+      if (isH) await api('vhidx/' + ik + '/' + pid + '.json', 'PUT', { t: SV, ti: title.slice(0, 120), ...(hkey ? { lk: hkey } : {}) });   // особистий список адміна
       await api((isH ? 'vhid/' : 'vit/') + pid + '.json', 'PUT', node);        // крок 3: сам допис
     } catch (e) { api('.json', 'PATCH', { ['vblob/' + pid]: null, ['vauth/' + pid]: null, ...(isH ? { ['vhidx/' + ik + '/' + pid]: null } : {}) }).catch(() => {}); throw e; }
     $('dPost').close(); $('pTitle').value = ''; $('pText').value = ''; $('pX').checked = false; $('pH').checked = false; $('pHbox').hidden = true; $('pPw').value = ''; $('pPw2').value = ''; pfiles = []; drawPChips(); err.textContent = '';
-    if (isH) { $('lkTxt').textContent = vlink('h', pid); $('dLink').showModal(); } else refreshVit();
+    if (isH) { $('lkTxt').textContent = vlink('h', pid, null, hkey); $('lkHead').textContent = hkey ? 'Посилання (відкриє кожен, хто його має — тримайте в таємниці):' : 'Посилання (без пароля воно нічого не показує):'; $('lkNote').textContent = hkey ? 'Пароля немає: ключ доступу вбудований у посилання.' : 'Пароль передайте окремо. Відновити його неможливо.'; $('dLink').showModal(); } else refreshVit();
   } catch (e) { err.textContent = isAuthErr(e) ? 'Доступ відхилено — увійдіть знову.' : e.message; }
   btn.disabled = false;
 };
@@ -850,7 +851,7 @@ $('nGo').onclick = async () => {
 
 
 // ---- посилання на проєкт чи файл вітрини: https://…/#/p/<id> (проєкт) і #/f/<id>/<номер файлу> (файл) ----
-const vlink = (t, k, i) => location.origin + location.pathname + '#/' + t + '/' + k + (i != null ? '/' + i : '');
+const vlink = (t, k, i, key) => location.origin + location.pathname + '#/' + t + '/' + k + (key ? ':' + key : '') + (i != null ? '/' + i : '');
 $('vClose').onclick = () => $('dView').close();
 async function viewFile(p, k, i, f, getB64, lnk) {
   if (f.type === 'text/html') {          // програма: одразу на весь екран, в ізольованому вікні
@@ -877,16 +878,30 @@ function askPassword(tryFn) {
     dlg.showModal();
   });
 }
-async function openHidden(k, idx) {
+async function openApps(p, getB64) {    // HTML-проєкт: одразу як вікно-програма (перше — великим, решта згорнуті в панелі)
+  const ids = (p.files || []).map((f, i) => f.type === 'text/html' ? i : -1).filter(i => i >= 0); if (!ids.length) return false;
+  let first = true;
+  for (const i of ids) {
+    const f = p.files[i]; let u8 = fromB64(await getB64(i, f)); if (f.c) u8 = await ungz(u8);
+    const w = createWin(new TextDecoder().decode(u8), f.name, first ? {} : { auto: true });
+    if (first) { Object.assign(w.style, { left: '8px', top: '8px', width: (innerWidth - 16) + 'px', height: Math.max(220, innerHeight - 72) + 'px' }); focusWin(w); }
+    first = false;
+  }
+  return true;
+}
+async function openHidden(k, idx, key) {
   const n = await api('vhid/' + k + '.json');
   if (!n) { alert('Прихований проєкт видалено, або посилання хибне.'); return; }
   const cipher = await fetchChunks(k, 0, n.cn || 0, null, 'vblob');
-  const m = await askPassword(pw => decryptPayload({ s: n.s, iv: n.iv, d: cipher }, pw).catch(() => null));
-  if (!m) return;
-  const p = { ...m, a: n.a, an: n.an, t: n.t }; $('vwrap').replaceChildren();
-  if (idx == null) { $('vwrap').append(renderPost(p, k, { hid: true })); $('dView').showModal(); return; }
+  const dec = pw => decryptPayload({ s: n.s, iv: n.iv, d: cipher }, pw).catch(() => null);
+  const m = key ? await dec(key) : await askPassword(dec);
+  if (!m) { if (key) alert('Посилання хибне або пошкоджене: вміст не розшифровується.'); return; }
+  const p = { ...m, a: n.a, an: n.an, t: n.t };
+  if (idx == null && p.x && await openApps(p, async (i, f) => f.d)) return;
+  $('vwrap').replaceChildren();
+  if (idx == null) { $('vwrap').append(renderPost(p, k, { hid: true, key })); $('dView').showModal(); return; }
   const f = (p.files || [])[idx]; if (!f) { alert('Файл у цьому проєкті не знайдено.'); return; }
-  await viewFile(p, k, idx, f, async () => f.d, vlink('h', k, idx));
+  await viewFile(p, k, idx, f, async () => f.d, vlink('h', k, idx, key));
 }
 $('pH').onchange = () => { $('pHbox').hidden = !$('pH').checked; };
 $('lkCopy').onclick = e => copyText($('lkTxt').textContent, e.currentTarget);
@@ -905,8 +920,8 @@ $('bMine').onclick = async () => {
     rows.forEach(([pid, e]) => {
       const r = document.createElement('div'); r.className = 'xchip';
       r.innerHTML = '<span class="xt"></span><span><button class="cp-ico" type="button" title="Копіювати посилання">🔗</button><button class="cp-ico" type="button" title="Видалити">✕</button></span>';
-      r.firstChild.textContent = '🔒 ' + e.ti + ' · ' + fmt(e.t);
-      const [cp, del] = r.querySelectorAll('button'); cp.onclick = () => copyText(vlink('h', pid), cp);
+      r.firstChild.textContent = (e.lk ? '🔗 ' : '🔒 ') + e.ti + ' · ' + fmt(e.t) + (e.lk ? ' · за посиланням' : ' · з паролем');
+      const [cp, del] = r.querySelectorAll('button'); cp.onclick = () => copyText(vlink('h', pid, null, e.lk), cp);
       del.onclick = async () => {
         if (!confirm('Видалити прихований проєкт «' + e.ti + '» назавжди?')) return;
         try { await adminDelete(pid, 'vhid', { ['vhidx/' + ik + '/' + pid]: null }); r.remove(); }
@@ -917,15 +932,18 @@ $('bMine').onclick = async () => {
   } catch (e) { L.textContent = ''; err.textContent = e.message; }
 };
 async function routeHash() {
-  const m = location.hash.match(/^#\/(p|f|h)\/([0-9a-f]{16})(?:\/(\d+))?$/i); if (!m) return;
+  const m = location.hash.match(/^#\/(p|f|h)\/([0-9a-f]{16})(?::([0-9a-f]{32}))?(?:\/(\d+))?$/i); if (!m) return;
   const k = m[2].toLowerCase(); setView('vit');
   try {
-    if (m[1] === 'h') { await openHidden(k, m[3] == null ? null : +m[3]); return; }
+    if (m[1] === 'h') { await openHidden(k, m[4] == null ? null : +m[4], (m[3] || '').toLowerCase()); return; }
     const p = await api('vit/' + k + '.json');
     if (!p) { alert('Цей проєкт видалено, або посилання хибне.'); return; }
     $('vwrap').replaceChildren();
-    if (m[1] === 'p' || m[3] == null) { $('vwrap').append(renderPost(p, k)); $('dView').showModal(); return; }
-    const i = +m[3], f = (p.files || [])[i]; if (!f) { alert('Файл у цьому проєкті не знайдено.'); return; }
+    if (m[1] === 'p' || m[4] == null) {
+      if (p.x && await openApps(p, (i, f) => fetchChunks(k, i, f.cn || 0, null, 'vblob'))) return;     // HTML-проєкт: одразу вікном
+      $('vwrap').append(renderPost(p, k)); $('dView').showModal(); return;
+    }
+    const i = +m[4], f = (p.files || [])[i]; if (!f) { alert('Файл у цьому проєкті не знайдено.'); return; }
     await viewFile(p, k, i, f, prog => fetchChunks(k, i, f.cn || 0, prog, 'vblob'), vlink('f', k, i));
   } catch (e) { alert(e.message); }
 }
